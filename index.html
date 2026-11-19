@@ -53,6 +53,8 @@ $('file').onchange=async e=>{
   const r=await Tesseract.recognize(f,'eng',{logger:m=>{if(m.status=='recognizing text')$('status').textContent='读字中 '+Math.round(m.progress*100)+'%'}});
   const text=r.data.text;
   for(const k of order){const m=text.match(KEY[k]);if(m&&!$(k).value)$(k).value=m.groups.v.trim().replace(/[.,;]$/,'');}
+  if(!$('exp').value){const ds=[...text.matchAll(/\b(\d{4})[\-\/.](\d{1,2})(?:[\-\/.](\d{1,2}))?\b|\b(?:(\d{1,2})[\-\/.])?(\d{1,2})[\-\/.](\d{4})\b/g)].map(m=>{const y=+(m[1]||m[6]),mo=+(m[2]||m[5]);return{t:m[0],k:y*100+mo,ok:y>1990&&y<2100&&mo>=1&&mo<=12}}).filter(d=>d.ok);
+   if(ds.length){ds.sort((a,b)=>b.k-a.k);$('exp').value=ds[0].t;}}
   const words=[...new Set(text.split(/\s+/).map(w=>w.replace(/^[:#.,]+|[:#.,]+$/g,'')).filter(w=>w.length>1))];
   words.forEach(w=>{const c=document.createElement('button');c.className='chip';c.textContent=w;
    c.onclick=()=>{$(cur).value=w;const i=order.indexOf(cur);if(i<2)pick(order[i+1]);};$('chips').appendChild(c);});
