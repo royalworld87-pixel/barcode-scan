@@ -23,8 +23,9 @@ input{width:100%;box-sizing:border-box;padding:10px;font-size:17px;border:1px so
 .card b{display:block;margin-bottom:4px}
 </style></head><body>
 <h1>拍照出条码（SKU / Batch / Expiry）</h1>
-<input type="file" id="file" accept="image/*" capture="environment" hidden>
-<button class="btn" onclick="file.click()">📷 拍照或选照片</button>
+<input type="file" id="cam" accept="image/*" capture="environment" hidden>
+<input type="file" id="gal" accept="image/*" hidden>
+<div style="display:flex;gap:8px"><button class="btn" onclick="cam.click()">📷 拍照</button><button class="btn" onclick="gal.click()">🖼️ 选照片</button></div>
 <div id="status">拍好后会自动读字，读完点下面的字填进去。</div>
 <img id="preview">
 <div class="fields">
@@ -33,7 +34,7 @@ input{width:100%;box-sizing:border-box;padding:10px;font-size:17px;border:1px so
 <div id="chips"></div>
 <label>SKU</label><input id="sku">
 <label>Batch</label><input id="batch">
-<label>Expiry Date</label><input id="exp">
+<label>Expiry Date（DDMMYYYY；标签只有年月时取该月最后一天）</label><input id="exp">
 <button class="btn" onclick="make()">生成条码</button>
 <div id="out"></div>
 <button class="btn gray" onclick="clearAll()">清空，拍下一张</button>
@@ -45,7 +46,7 @@ function pick(f){cur=f;document.querySelectorAll('.fields button').forEach(b=>b.
 const KEY={sku:/\b(?:SKU|ITEM(?:\s*(?:CODE|NO))?|ARTICLE(?:\s*NO)?|REF|PRODUCT\s*CODE|CODE|P\/?N|MATERIAL)\b[\s.:#]*(?:NO\.?)?[\s.:#]*(?<v>(?=[A-Z0-9\-\/.]*\d)[A-Z0-9][A-Z0-9\-\/.]{2,})/i,
  batch:/\b(?:BATCH|LOT|B\/N|BN)\b[\s.:#]*(?:NO\.?)?[\s.:#]*(?<v>(?=[A-Z0-9\-\/.]*\d)[A-Z0-9][A-Z0-9\-\/.]{1,})/i,
  exp:/\b(?:EXP(?:IRY|IRATION)?(?:[\s.]*DATE)?|EXD|USE\s*BY|BEST\s*BEFORE|BB)\b[\s.:]*(?<v>\d{1,4}[\-\/. ][0-9A-Z]{1,4}(?:[\-\/. ]\d{2,4})?)/i};
-$('file').onchange=async e=>{
+async function onPic(e){
  const f=e.target.files[0];if(!f)return;
  $('preview').src=URL.createObjectURL(f);$('preview').style.display='block';
  $('chips').innerHTML='';$('status').textContent='正在读字…第一次要下载识字模型，约 10 到 30 秒';
@@ -61,7 +62,15 @@ $('file').onchange=async e=>{
   $('status').textContent='读完了。已自动猜好的会先填上；不对就先选①②③，再点下面的字，也可以直接改。';
  }catch(err){$('status').textContent='读字失败：'+err.message+'。可以直接手动输入。';}
 };
-function make(){
+const MON={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+function toDMY(t){t=(t||'').trim().toUpperCase();if(!t||/^\d{8}$/.test(t))return t;
+ const p=t.split(/[\s\-\/.]+/).filter(Boolean).map(x=>MON[x.slice(0,3)]||x);let d,m,y;
+ if(p.length==2){if(String(p[0]).length==4){y=p[0];m=p[1]}else{m=p[0];y=p[1]}}
+ else if(p.length==3){if(String(p[0]).length==4){y=p[0];m=p[1];d=p[2]}else{d=p[0];m=p[1];y=p[2]}}else return t;
+ y=+y;m=+m;if(y<100)y+=2000;if(!(m>=1&&m<=12)||!(y>1990&&y<2100))return t;
+ if(!d)d=new Date(y,m,0).getDate();d=+d;
+ return String(d).padStart(2,'0')+String(m).padStart(2,'0')+y;}
+function make(){$('exp').value=toDMY($('exp').value);
  const out=$('out');out.innerHTML='';
  for(const [k,name] of [['sku','SKU'],['batch','Batch'],['exp','Expiry Date']]){
   const v=$(k).value.trim();if(!v)continue;
@@ -72,5 +81,5 @@ function make(){
  if(!out.innerHTML)out.innerHTML='<div class="card">三格都是空的，先填内容。</div>';
  out.scrollIntoView({behavior:'smooth'});
 }
-function clearAll(){['sku','batch','exp'].forEach(k=>$(k).value='');$('chips').innerHTML='';$('out').innerHTML='';$('preview').style.display='none';$('file').value='';pick('sku');$('status').textContent='拍好后会自动读字，读完点下面的字填进去。';}
+function clearAll(){['sku','batch','exp'].forEach(k=>$(k).value='');$('chips').innerHTML='';$('out').innerHTML='';$('preview').style.display='none';$('cam').value='';$('gal').value='';pick('sku');$('status').textContent='拍好后会自动读字，读完点下面的字填进去。';}
 </script></body></html>
