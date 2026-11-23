@@ -53,6 +53,9 @@ function candidates(text){const c={sku:[],batch:[],exp:[]};const T0=text.replace
  const ds=dates(T);ds.forEach(d=>c.exp.push({v:d.t,k:d.k,w:1}));
  for(const m of T.toUpperCase().matchAll(FB.batch))if(!/^20\d{4}$/.test(m[0]))c.batch.push({v:m[0],w:1});
  for(const m of T.toUpperCase().matchAll(FB.sku)){const v=clean(m[0]);if(!/^20[2-4]\d(0[1-9]|1[0-2])$/.test(v))c.sku.push({v,w:1});}
+ // GS1 小字比 LOT 大字更容易认错：同一遍里两者只差一个字时，以大字为准
+ const kwB=c.batch.filter(x=>x.kw).map(x=>x.v);
+ c.batch=c.batch.filter(x=>!(x.w==5&&kwB.some(k=>k!=x.v&&k.length==x.v.length&&ed(k,x.v)==1)));
  // SKU 和批号不要互相抢
  return c;}
 function dateKey(t){const d=dates(t);return d.length?d[0].k:0;}
@@ -64,6 +67,9 @@ function vote(texts,opt={}){const tally={sku:{},batch:{},exp:{}};
   for(const key in seen)if(/^\d/.test(key)){tally.exp[key]=(tally.exp[key]||0)+seen[key];if(!tally.exp['t'+key]||seen['k'+key])tally.exp['t'+key]=seen['t'+key];if(seen['k'+key])tally.exp['k'+key]=(tally.exp['k'+key]||0)+seen['k'+key];}}
  const best=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]||b[0].length-a[0].length)[0];
  const r={};
+ // 任何一遍里 LOT 大字读到的值，若和 GS1 小字只差一个字，GS1 那个的票并给大字
+ const kwAll=new Set(),gsAll=new Set();for(const t of texts){const c=candidates(t);c.batch.forEach(x=>{if(x.kw)kwAll.add(x.v);if(x.w==5)gsAll.add(x.v);});}
+ for(const g of gsAll){const k=[...kwAll].find(k=>k!=g&&k.length==g.length&&ed(k,g)==1);if(k&&tally.batch[g]){tally.batch[k]=(tally.batch[k]||0)+tally.batch[g];delete tally.batch[g];}}
  for(const k of ['sku','batch'])r[k]=merge(tally[k]);
  if(r.sku&&r.batch&&r.sku==r.batch)r.batch='';
  // 有效期：关键词命中的优先；不然在“读到不止一次”的日期里取最晚的；都只一次就取最晚

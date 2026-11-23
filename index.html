@@ -34,7 +34,7 @@ details pre{white-space:pre-wrap;word-break:break-all;max-height:300px;overflow:
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
 <input type="file" id="gal" accept="image/*" hidden>
 <div style="display:flex;gap:8px"><button class="btn" onclick="cam.click()">📷 拍照</button><button class="btn" onclick="gal.click()">🖼️ 选照片</button></div>
-<div id="status">拍好后会自动读字并填好三格（v6）。拍的时候靠近标签、对准文字、别反光。</div>
+<div id="status">拍好后会自动读字并填好三格（v6.1）。拍的时候靠近标签、对准文字、别反光。</div>
 <img id="preview">
 <div class="fields">
  <button data-f="sku" class="on">① SKU</button><button data-f="batch">② Batch</button><button data-f="exp">③ Expiry</button>
@@ -127,5 +127,5 @@ function make(){$('exp').value=toDMY($('exp').value);
  if(!out.innerHTML)out.innerHTML='<div class="card">三格都是空的，先填内容。</div>';
  out.scrollIntoView({behavior:'smooth'});
 }
-function clearAll(){order.forEach(k=>{$(k).value='';$(k).classList.remove('auto');delete touched[k];});$('chips').innerHTML='';$('dchips').innerHTML='';$('raw').textContent='';$('out').innerHTML='';$('preview').style.display='none';$('cam').value='';$('gal').value='';pick('sku');$('status').textContent='拍好后会自动读字并填好三格（v6）。';}
+function clearAll(){order.forEach(k=>{$(k).value='';$(k).classList.remove('auto');delete touched[k];});$('chips').innerHTML='';$('dchips').innerHTML='';$('raw').textContent='';$('out').innerHTML='';$('preview').style.display='none';$('cam').value='';$('gal').value='';pick('sku');$('status').textContent='拍好后会自动读字并填好三格（v6.1）。';}
 </script></body></html>
