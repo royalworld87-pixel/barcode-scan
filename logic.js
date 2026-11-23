@@ -19,7 +19,8 @@ function ed(a,b){const m=a.length,n=b.length,d=[...Array(m+1)].map((_,i)=>[i,...
 function merge(t){const keys=Object.keys(t).sort((a,b)=>t[b]-t[a]),groups=[];
  for(const k of keys){const g=groups.find(g=>g.items.some(x=>ed(x,k)<=Math.max(1,Math.floor(Math.min(x.length,k.length)/4))));if(g){g.items.push(k);g.s+=t[k];}else groups.push({items:[k],s:t[k]});}
  groups.sort((a,b)=>b.s-a.s);if(!groups.length)return '';const g=groups[0];
- const lenS={};g.items.forEach(x=>lenS[x.length]=(lenS[x.length]||0)+t[x]);const L=+Object.entries(lenS).sort((a,b)=>b[1]-a[1]||b[0]-a[0])[0][0];
+ // 短的是长的开头（G2F200X10 / G2F200X100）：算长的，读漏尾巴比多读常见
+ const lenS={};g.items.forEach(x=>{const longer=g.items.filter(y=>y.length>x.length&&y.startsWith(x)).sort((a,b)=>b.length-a.length)[0];const L=longer?longer.length:x.length;lenS[L]=(lenS[L]||0)+t[x];});const L=+Object.entries(lenS).sort((a,b)=>b[1]-a[1]||b[0]-a[0])[0][0];
  const same=g.items.filter(x=>x.length==L);let out='';
  for(let i=0;i<L;i++){const c={};same.forEach(x=>c[x[i]]=(c[x[i]]||0)+t[x]);out+=Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0];}
  return out;}
@@ -40,7 +41,13 @@ function gs1Date(v){const y=2000+ +v.slice(0,2),m=+v.slice(2,4);let d=+v.slice(4
 function candidates(text){const c={sku:[],batch:[],exp:[]};const T0=text.replace(/[“”"'‘’«»]/g,' ');
  for(const m of T0.matchAll(GS1.lot))c.batch.push({v:clean(m.groups.v),w:5});
  for(const m of T0.matchAll(GS1.exp)){const d=gs1Date(m.groups.v);if(d)c.exp.push({v:d.t,k:d.k,w:5,kw:1});}
+ const sns=[...T0.matchAll(/\bS\/?N\b\s*[:#.]?\s*([0-9][0-9 ]{6,})/gi)].map(m=>m[1].replace(/\s/g,''));
  const T=T0.replace(GS1.drop,' ');
+ // 单独的一串数字（可被空格隔开）正好是序号 S/N 的开头 → 很可能是批号
+ if(sns.length)for(const m of T.matchAll(/\b\d{3,}(?: \d{2,})*\b/g)){const v=m[0].replace(/\s/g,'');if(v.length>=5&&sns.some(n=>n.startsWith(v)&&n.length>v.length))c.batch.push({v,w:4});}
+ // 字母数字混合的长码（可被空格隔开：G2F 200 X100）当 SKU 后备
+ for(const m of T.toUpperCase().matchAll(/\b[A-Z][A-Z0-9]*\d[A-Z0-9]*(?: (?=[A-Z0-9]*\d)[A-Z0-9]{1,6}){0,3}\b/g)){const v=m[0].replace(/\s/g,'');
+  if(v.length>=7&&v.length<=16&&(v.match(/[A-Z]/g)||[]).length>=2&&(v.match(/\d/g)||[]).length>=3)c.sku.push({v,w:0.5});}
  for(const k of ['sku','batch','exp']){for(const line of T.split('\n')){const m=line.match(KEY[k]);if(m)c[k].push({v:clean(m.groups.v),w:3,kw:1});}}
  // 有效期：关键词后面那个；否则取最晚的日期
  const ds=dates(T);ds.forEach(d=>c.exp.push({v:d.t,k:d.k,w:1}));

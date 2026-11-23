@@ -2,10 +2,11 @@
 <html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>拍照出条码</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script src="prep.js?v=5"></script>
-<script src="logic.js?v=5"></script>
+<script src="prep.js?v=6"></script>
+<script src="logic.js?v=6"></script>
+<script src="paddle.js?v=6"></script>
 <style>
 body{font-family:system-ui,sans-serif;margin:0;padding:14px;background:#f6f6f6;color:#222;max-width:560px;margin:auto}
 h1{font-size:20px;margin:6px 0 12px}
@@ -33,7 +34,7 @@ details pre{white-space:pre-wrap;word-break:break-all;max-height:300px;overflow:
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
 <input type="file" id="gal" accept="image/*" hidden>
 <div style="display:flex;gap:8px"><button class="btn" onclick="cam.click()">📷 拍照</button><button class="btn" onclick="gal.click()">🖼️ 选照片</button></div>
-<div id="status">拍好后会自动读字并填好三格（v5）。拍的时候靠近标签、对准文字、别反光。</div>
+<div id="status">拍好后会自动读字并填好三格（v6）。拍的时候靠近标签、对准文字、别反光。</div>
 <img id="preview">
 <div class="fields">
  <button data-f="sku" class="on">① SKU</button><button data-f="batch">② Batch</button><button data-f="exp">③ Expiry</button>
@@ -57,8 +58,18 @@ function setF(k,v){$(k).value=v;touched[k]=1;$(k).classList.remove('auto');}
 $('cam').onchange=onPic;$('gal').onchange=onPic;   // v2 漏了这一行：选了照片什么都不会发生
 // 三种读法：二值化 1600 (整块/零散)，灰度 2000
 const PASSES=[{L:1600,mode:'bin',psm:'6'},{L:1600,mode:'bin',psm:'11'},{L:2000,mode:'gray',psm:'6'}];
-let worker=null;
-async function getWorker(){if(!worker)worker=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status&&m.status!='recognizing text'&&m.progress<1)$('status').textContent='准备识字模型… '+Math.round((m.progress||0)*100)+'%（第一次要下载，约 10 MB）';}});return worker;}
+let worker=null,paddleOK=null,engine='';
+const ORT_CDN='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
+async function getPaddle(){if(paddleOK!==null)return paddleOK;
+ try{ort.env.wasm.wasmPaths=ORT_CDN;ort.env.wasm.numThreads=1;$('status').textContent='准备识字模型…（第一次要下载约 12 MB，之后会记住）';
+  await PaddleLite.init(ort,'models/',async u=>{const r=await fetch(u+'?v=6',{cache:'force-cache'});if(!r.ok)throw new Error(u+' '+r.status);return r.arrayBuffer();});paddleOK=true;}
+ catch(e){console.log('paddle failed',e);paddleOK=false;}return paddleOK;}
+function loadScript(u){return new Promise((ok,bad)=>{const s=document.createElement('script');s.src=u;s.onload=ok;s.onerror=()=>bad(new Error('载入失败 '+u));document.head.appendChild(s);});}
+function toRGBA(img,maxSide,rot){const w=img.naturalWidth,h=img.naturalHeight,s=Math.min(1,maxSide/Math.max(w,h)),tw=Math.round(w*s),th=Math.round(h*s);
+ const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});x.imageSmoothingQuality='high';
+ if(rot){c.width=th;c.height=tw;x.translate(th/2,tw/2);x.rotate(rot*Math.PI/180);x.drawImage(img,-tw/2,-th/2,tw,th);}else{c.width=tw;c.height=th;x.drawImage(img,0,0,tw,th);}
+ return x.getImageData(0,0,c.width,c.height);}
+async function getWorker(){if(typeof Tesseract=='undefined')await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');if(!worker)worker=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status&&m.status!='recognizing text'&&m.progress<1)$('status').textContent='准备识字模型… '+Math.round((m.progress||0)*100)+'%（第一次要下载，约 10 MB）';}});return worker;}
 function loadImg(f){return new Promise((ok,bad)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>bad(new Error('打不开这张图'));i.src=URL.createObjectURL(f);});}
 // 缩放（逐步减半，画质好）→ 灰度/对比度/二值化
 function render(img,L,mode,rot){let w=img.naturalWidth,h=img.naturalHeight,src=img;const s=Math.min(1,L/Math.max(w,h))||1;
@@ -87,15 +98,21 @@ async function onPic(e){
  $('preview').src=URL.createObjectURL(f);$('preview').style.display='block';
  $('chips').innerHTML='';$('raw').textContent='';$('status').textContent='正在准备…';
  try{
-  const img=await loadImg(f);const w=await getWorker();const texts=[];
-  const run=async(p,i,n,rot)=>{$('status').textContent=`读字中 第 ${i}/${n} 遍…（共约 10–30 秒）`;
-   await w.setParameters({tessedit_pageseg_mode:p.psm});const r=await w.recognize(render(img,p.L,p.mode,rot));
-   texts.push(r.data.text);$('raw').textContent+=`--- 第 ${texts.length} 遍 (${p.mode} ${p.L}${rot?' 转'+rot+'°':''}) ---\n`+r.data.text+'\n';fill(texts);chips(texts);};
-  for(let i=0;i<PASSES.length;i++)await run(PASSES[i],i+1,PASSES.length,0);
-  let r=fill(texts);
-  if(!r.sku&&!r.batch&&!r.exp){for(const rot of [90,270]){await run(PASSES[1],'转'+rot+'°',PASSES.length,rot);r=fill(texts);if(r.sku||r.batch||r.exp)break;}}
+  const img=await loadImg(f);const texts=[];let r;
+  if(await getPaddle()){engine='Paddle';
+   const runP=async(lim,i,rot)=>{$('status').textContent=`读字中 第 ${i} 遍…`;await new Promise(z=>setTimeout(z,30));
+    const o=await PaddleLite.ocr(toRGBA(img,2000,rot),lim);texts.push(o.text);$('raw').textContent+=`--- 第 ${texts.length} 遍 (Paddle ${lim}${rot?' 转'+rot+'°':''}) ---\n`+o.text+'\n';fill(texts);chips(texts);};
+   await runP(960,'1/2',0);await runP(1600,'2/2',0);r=fill(texts);
+   if(!r.sku&&!r.batch&&!r.exp)for(const rot of [90,270]){await runP(960,'转'+rot+'°',rot);r=fill(texts);if(r.sku||r.batch||r.exp)break;}
+  }else{engine='Tesseract';const w=await getWorker();
+   const run=async(p,i,n,rot)=>{$('status').textContent=`读字中 第 ${i}/${n} 遍…（备用引擎，约 10–30 秒）`;
+    await w.setParameters({tessedit_pageseg_mode:p.psm});const o=await w.recognize(render(img,p.L,p.mode,rot));
+    texts.push(o.data.text);$('raw').textContent+=`--- 第 ${texts.length} 遍 (${p.mode} ${p.L}${rot?' 转'+rot+'°':''}) ---\n`+o.data.text+'\n';fill(texts);chips(texts);};
+   for(let i=0;i<PASSES.length;i++)await run(PASSES[i],i+1,PASSES.length,0);
+   r=fill(texts);
+   if(!r.sku&&!r.batch&&!r.exp){for(const rot of [90,270]){await run(PASSES[1],'转'+rot+'°',PASSES.length,rot);r=fill(texts);if(r.sku||r.batch||r.exp)break;}}}
   const miss=order.filter(k=>!$(k).value).map(k=>({sku:'SKU',batch:'Batch',exp:'Expiry'})[k]);
-  $('status').textContent=(r.expPast&&!touched.exp?'⚠️ 只读到已过去的日期（可能是生产日期），有效期请核对。':'')+(miss.length?'读完了，'+miss.join('、')+' 没找到：先选①②③，再点下面的字。':'读完了，三格已自动填好（黄色=自动猜的，请核对）。')+' 不对可以点字更换或直接改。';
+  $('status').textContent=(r.expPast&&!touched.exp?'⚠️ 只读到已过去的日期（可能是生产日期），有效期请核对。':'')+(miss.length?'读完了（'+engine+'），'+miss.join('、')+' 没找到：先选①②③，再点下面的字。':'读完了（'+engine+'），三格已自动填好（黄色=自动猜的，请核对）。')+' 不对可以点字更换或直接改。';
   if(!miss.includes('SKU'))pick(miss.length?({SKU:'sku',Batch:'batch',Expiry:'exp'})[miss[0]]:'sku');
  }catch(err){$('status').textContent='读字失败：'+err.message+'。可以直接手动输入。';}
 }
@@ -110,5 +127,5 @@ function make(){$('exp').value=toDMY($('exp').value);
  if(!out.innerHTML)out.innerHTML='<div class="card">三格都是空的，先填内容。</div>';
  out.scrollIntoView({behavior:'smooth'});
 }
-function clearAll(){order.forEach(k=>{$(k).value='';$(k).classList.remove('auto');delete touched[k];});$('chips').innerHTML='';$('dchips').innerHTML='';$('raw').textContent='';$('out').innerHTML='';$('preview').style.display='none';$('cam').value='';$('gal').value='';pick('sku');$('status').textContent='拍好后会自动读字并填好三格（v5）。';}
+function clearAll(){order.forEach(k=>{$(k).value='';$(k).classList.remove('auto');delete touched[k];});$('chips').innerHTML='';$('dchips').innerHTML='';$('raw').textContent='';$('out').innerHTML='';$('preview').style.display='none';$('cam').value='';$('gal').value='';pick('sku');$('status').textContent='拍好后会自动读字并填好三格（v6）。';}
 </script></body></html>
