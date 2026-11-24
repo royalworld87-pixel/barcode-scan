@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>拣货核对</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.wasm.min.js"></script>
+<script src="../prep.js?v=6"></script>
+<script src="../logic.js?v=6"></script>
+<script src="../paddle.js?v=6"></script>
+<script src="pick.js?v=1"></script>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;padding:12px;background:#f4f4f4;color:#222;max-width:600px;margin:auto}
+h1{font-size:21px;margin:4px 0 6px}h2{font-size:18px;margin:0 0 6px}
+.top{font-size:14px;color:#555}.top a{color:#1a73e8}
+.sec{background:#fff;border-radius:12px;padding:12px;margin:12px 0;box-shadow:0 1px 3px #0001}
+.row2{display:flex;gap:8px}
+.btn{display:block;width:100%;padding:16px 8px;font-size:18px;border:0;border-radius:12px;background:#1a73e8;color:#fff;margin:6px 0}
+.btn.green{background:#188038}.btn.gray{background:#666}.btn.red{background:#c5221f}.btn.small{padding:10px;font-size:15px}
+.st{font-size:14px;color:#555;margin:4px 0}
+.prev{max-width:100%;max-height:220px;border-radius:8px;display:none;margin:6px auto}
+table{width:100%;border-collapse:collapse;font-size:15px}
+td,th{padding:4px 2px;border-bottom:1px solid #eee;text-align:left;vertical-align:middle}
+td input{width:100%;box-sizing:border-box;padding:8px 3px;font-size:15px;letter-spacing:-.2px;border:1px solid #ccc;border-radius:6px}
+td.n{width:16px;color:#888;font-size:13px}td.q{width:44px}td.x{width:32px}
+.del{border:0;background:#eee;border-radius:6px;font-size:16px;padding:8px}
+label{display:block;font-size:14px;margin-top:8px;color:#444}
+.f{width:100%;box-sizing:border-box;padding:12px;font-size:19px;border:1px solid #bbb;border-radius:8px}
+.f.auto{background:#fffbe6}
+.banner{font-size:20px;font-weight:bold;padding:14px;border-radius:10px;margin:8px 0;display:none}
+.ok{background:#e6f4ea;color:#137333}.bad{background:#fce8e6;color:#c5221f;border:3px solid #c5221f}.warn{background:#fef7e0;color:#b06000}
+.li{padding:8px;border-radius:8px;margin:4px 0;font-size:16px}
+.li.done{background:#e6f4ea}.li.part{background:#fef7e0}.li.todo{background:#f1f3f4}.li.over{background:#fef7e0}
+.pk{padding:8px;border-radius:8px;margin:4px 0;font-size:15px}
+.pk.bad{border-width:2px}
+.sum{display:flex;gap:6px;text-align:center}.sum div{flex:1;padding:8px;border-radius:8px;font-size:14px}.sum b{display:block;font-size:22px}
+details{font-size:13px}details pre{white-space:pre-wrap;word-break:break-all;max-height:240px;overflow:auto}
+</style></head><body>
+<h1>拣货核对</h1>
+<div class="top">① 拍 picking list → ② 拿货时拍货物标签 → ③ 看结果。全部在手机上处理，不上传。 <a href="../">← 拍照出条码</a></div>
+
+<div class="sec" id="s1">
+<h2>① 清单（Picking list）</h2>
+<input type="file" id="lcam" accept="image/*" capture="environment" hidden><input type="file" id="lgal" accept="image/*" hidden>
+<div class="row2"><button class="btn" onclick="lcam.click()">📷 拍清单</button><button class="btn" onclick="lgal.click()">🖼️ 选照片</button></div>
+<div class="st" id="lst">拍的时候整张单放平、拍正、光线够。读完可以直接改错字。</div>
+<img class="prev" id="lprev">
+<table><thead><tr><th></th><th>SKU</th><th>批号 Batch/Lot</th><th>数量</th><th></th></tr></thead><tbody id="ltb"></tbody></table>
+<button class="btn small gray" onclick="addRow()">＋ 加一行</button>
+<details><summary>看看读到的原文</summary><pre id="lraw"></pre></details>
+</div>
+
+<div class="sec" id="s2">
+<h2>② 拣货：拍货物标签</h2>
+<input type="file" id="pcam" accept="image/*" capture="environment" hidden><input type="file" id="pgal" accept="image/*" hidden>
+<div class="row2"><button class="btn" onclick="pcam.click()">📷 拍货物</button><button class="btn" onclick="pgal.click()">🖼️ 选照片</button></div>
+<div class="st" id="pst">靠近标签，对准 SKU/REF 和 LOT 那几行。</div>
+<img class="prev" id="pprev">
+<label>SKU</label><input class="f" id="psku" autocomplete="off">
+<label>批号 Batch/Lot</label><input class="f" id="pbatch" autocomplete="off">
+<label>数量（这次拿了几件）</label><input class="f" id="pqty" type="number" min="1" value="1">
+<button class="btn green" onclick="addPick()">✔ 加入核对</button>
+<div class="banner" id="ban"></div>
+<details><summary>看看读到的原文</summary><pre id="praw"></pre></details>
+</div>
+
+<div class="sec" id="s3">
+<h2>③ 结果</h2>
+<div class="sum" id="sum"></div>
+<h2 style="margin-top:10px;font-size:16px">清单每一行</h2><div id="rows"></div>
+<h2 style="margin-top:10px;font-size:16px">拍过的货</h2><div id="picks"></div>
+<div class="row2" style="margin-top:10px"><button class="btn small gray" onclick="clearPicks()">清空拣货记录</button><button class="btn small red" onclick="clearAll()">全部清空重来</button></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const SKEY='pickcheck_v1';let S={list:[],picks:[]};
+try{const v=JSON.parse(localStorage.getItem(SKEY)||'null');if(v&&v.list)S=v;}catch(e){}
+const save=()=>localStorage.setItem(SKEY,JSON.stringify(S));
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// ---- OCR 引擎（和条码页同一套）----
+let paddleOK=null,worker=null;const ORT_CDN='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
+async function getPaddle(st){if(paddleOK!==null)return paddleOK;
+ try{ort.env.wasm.wasmPaths=ORT_CDN;ort.env.wasm.numThreads=1;st.textContent='准备识字模型…（第一次要下载约 12 MB，之后会记住）';
+  await PaddleLite.init(ort,'../models/',async u=>{const r=await fetch(u+'?v=6',{cache:'force-cache'});if(!r.ok)throw new Error(u+' '+r.status);return r.arrayBuffer();});paddleOK=true;}
+ catch(e){console.log('paddle failed',e);paddleOK=false;}return paddleOK;}
+function loadScript(u){return new Promise((ok,bad)=>{const s=document.createElement('script');s.src=u;s.onload=ok;s.onerror=()=>bad(new Error('载入失败 '+u));document.head.appendChild(s);});}
+async function getWorker(st){if(typeof Tesseract=='undefined')await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');if(!worker)worker=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status&&m.status!='recognizing text'&&m.progress<1)st.textContent='准备备用识字模型… '+Math.round((m.progress||0)*100)+'%';}});return worker;}
+function loadImg(f){return new Promise((ok,bad)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>bad(new Error('打不开这张图'));i.src=URL.createObjectURL(f);});}
+function canvasOf(img,maxSide,rot){const w=img.naturalWidth,h=img.naturalHeight,s=Math.min(1,maxSide/Math.max(w,h)),tw=Math.round(w*s),th=Math.round(h*s);
+ const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});x.imageSmoothingQuality='high';
+ if(rot){c.width=th;c.height=tw;x.translate(th/2,tw/2);x.rotate(rot*Math.PI/180);x.drawImage(img,-tw/2,-th/2,tw,th);}else{c.width=tw;c.height=th;x.drawImage(img,0,0,tw,th);}return c;}
+const rgba=(img,m,rot)=>{const c=canvasOf(img,m,rot);return c.getContext('2d').getImageData(0,0,c.width,c.height);};
+const tick=()=>new Promise(z=>setTimeout(z,30));
+// ---- ① 清单 ----
+$('lcam').onchange=onList;$('lgal').onchange=onList;
+async function onList(e){const f=e.target.files[0];if(!f)return;e.target.value='';const st=$('lst');
+ if(S.list.length&&!confirm('换一张清单？现在的清单和拣货记录会被换掉。'))return;
+ $('lprev').src=URL.createObjectURL(f);$('lprev').style.display='block';$('lraw').textContent='';st.textContent='正在准备…';
+ try{const img=await loadImg(f);let items=[],eng;
+  if(await getPaddle(st)){eng='Paddle';st.textContent='读清单中…（表格字多，约 10–40 秒）';await tick();
+   const o=await PaddleLite.ocr(rgba(img,2400,0),1600);items=o.items;$('lraw').textContent=o.text;}
+  else{eng='Tesseract';const w=await getWorker(st);st.textContent='读清单中…（备用引擎，较慢）';await w.setParameters({tessedit_pageseg_mode:'11'});
+   const c=canvasOf(img,2400,0);const o=await w.recognize(c);items=(o.data.words||[]).map(x=>({x0:x.bbox.x0,y0:x.bbox.y0,x1:x.bbox.x1,y1:x.bbox.y1,text:x.text}));$('lraw').textContent=o.data.text;}
+  const r=Pick.parseList(items);
+  S.list=r.rows;S.picks=[];save();render();
+  st.textContent=r.rows.length?`读完了（${eng}），找到 ${r.rows.length} 行${r.header?'':'（没认出表头，是按每行猜的）'}。黄色格子请对照纸本核对，读错直接改。`:'没读出表格行。可以再拍一张更清楚的，或用“＋ 加一行”手动输入。';
+  $('s1').scrollIntoView({behavior:'smooth'});
+ }catch(err){st.textContent='读字失败：'+err.message+'。可以手动输入。';}}
+function addRow(){S.list.push({sku:'',batch:'',qty:1,manual:1});save();render();const ins=$('ltb').querySelectorAll('tr:last-child input');if(ins[0])ins[0].focus();}
+function delRow(i){S.list.splice(i,1);save();render();}
+function editRow(i,k,v){S.list[i][k]=k=='qty'?Math.max(1,parseInt(v)||1):v.trim().toUpperCase();S.list[i].manual=1;save();renderResult();}
+// ---- ② 拣货 ----
+$('pcam').onchange=onPick;$('pgal').onchange=onPick;
+['psku','pbatch'].forEach(k=>$(k).oninput=()=>$(k).classList.remove('auto'));
+async function onPick(e){const f=e.target.files[0];if(!f)return;e.target.value='';const st=$('pst');
+ $('psku').value='';$('pbatch').value='';$('pqty').value=1;$('ban').style.display='none';$('praw').textContent='';
+ $('pprev').src=URL.createObjectURL(f);$('pprev').style.display='block';st.textContent='正在准备…';
+ try{const img=await loadImg(f);const texts=[];let r,eng;
+  const show=()=>{r=vote(texts);const g=Pick.guessFromList(S.list,texts,r);$('psku').value=g.sku;$('pbatch').value=g.batch;['psku','pbatch'].forEach(k=>$(k).classList.add('auto'));return g;};
+  if(await getPaddle(st)){eng='Paddle';
+   const runP=async(lim,lab,rot)=>{st.textContent='读字中 '+lab+'…';await tick();const o=await PaddleLite.ocr(rgba(img,2000,rot),lim);texts.push(o.text);$('praw').textContent+=`--- ${lab} ---\n${o.text}\n`;return show();};
+   await runP(960,'第 1/2 遍',0);let g=await runP(1600,'第 2/2 遍',0);
+   if(!g.sku&&!g.batch)for(const rot of [90,270]){g=await runP(960,'转'+rot+'°',rot);if(g.sku||g.batch)break;}}
+  else{eng='Tesseract';const w=await getWorker(st);
+   for(const [L,mode,psm] of [[1600,'bin','6'],[1600,'bin','11'],[2000,'gray','6']]){st.textContent='读字中…（备用引擎）';await w.setParameters({tessedit_pageseg_mode:psm});
+    const c=canvasOf(img,L,0),x=c.getContext('2d'),d=x.getImageData(0,0,c.width,c.height);prep(d,mode);x.putImageData(d,0,0);const o=await w.recognize(c);texts.push(o.data.text);$('praw').textContent+=o.data.text+'\n';show();}}
+  const g=show();
+  st.textContent=`读完了（${eng}）`+(g.from=='list'?'，在清单里找到这个 SKU。':'。')+' 黄色=自动读的，核对没错就按“加入核对”。';
+ }catch(err){st.textContent='读字失败：'+err.message+'。可以手动输入。';}}
+function addPick(){const sku=$('psku').value.trim().toUpperCase(),batch=$('pbatch').value.trim().toUpperCase(),qty=Math.max(1,parseInt($('pqty').value)||1);
+ if(!sku){alert('SKU 是空的');return;}
+ S.picks.push({sku,batch,qty,t:Date.now()});save();const c=Pick.check(S.list,S.picks),p=c.picks[c.picks.length-1];
+ const b=$('ban');b.style.display='block';b.className='banner '+(p.st=='ok'?'ok':p.st=='over'?'warn':'bad');
+ b.textContent=(p.st=='ok'?'✅ ':p.st=='over'?'⚠️ ':'❌ ')+p.msg;
+ if(p.st=='badbatch'||p.st=='notinlist'||p.st=='maybe'){if(navigator.vibrate)navigator.vibrate([200,100,200]);}
+ $('psku').value='';$('pbatch').value='';$('pqty').value=1;$('pprev').style.display='none';['psku','pbatch'].forEach(k=>$(k).classList.remove('auto'));$('pst').textContent='已加入。拍下一件货。';
+ renderResult();}
+function delPick(i){S.picks.splice(i,1);save();renderResult();}
+// ---- ③ 结果 ----
+function render(){$('ltb').innerHTML=S.list.map((r,i)=>`<tr><td class="n">${i+1}</td><td><input class="${r.manual?'':'auto'}" value="${esc(r.sku)}" onchange="editRow(${i},'sku',this.value)"></td><td><input class="${r.manual?'':'auto'}" value="${esc(r.batch)}" onchange="editRow(${i},'batch',this.value)"></td><td class="q"><input type="number" min="1" value="${r.qty||1}" onchange="editRow(${i},'qty',this.value)"></td><td class="x"><button class="del" onclick="delRow(${i})">✕</button></td></tr>`).join('');
+ document.querySelectorAll('#ltb input.auto').forEach(x=>x.style.background='#fffbe6');renderResult();}
+function renderResult(){const c=Pick.check(S.list,S.picks);
+ const done=c.rows.filter(r=>r.st=='done').length,todo=c.rows.filter(r=>r.st=='todo'||r.st=='part').length,bad=c.picks.filter(p=>p.st=='badbatch'||p.st=='notinlist'||p.st=='maybe').length;
+ $('sum').innerHTML=`<div class="ok"><b>${done}/${S.list.length}</b>行拣齐</div><div class="warn"><b>${todo}</b>行还没拣齐</div><div class="${bad?'bad':'ok'}"><b>${bad}</b>件不对</div>`;
+ const lab={done:'✅ 拣齐',part:'🟡 还差',todo:'⬜ 还没拣',over:'⚠️ 拿多了'};
+ const order=c.rows.map((r,i)=>i).sort((a,b)=>({todo:0,part:1,over:2,done:3}[c.rows[a].st])-({todo:0,part:1,over:2,done:3}[c.rows[b].st])||a-b);
+ $('rows').innerHTML=S.list.length?order.map(i=>{const r=S.list[i],s=c.rows[i];return `<div class="li ${s.st}"><b>${i+1}.</b> ${esc(r.sku)} ・ 批号 ${esc(r.batch||'—')} ・ ${s.got}/${s.need} ${lab[s.st]}${s.st=='part'?' '+(s.need-s.got)+' 件':''}</div>`;}).join(''):'<div class="st">还没有清单。</div>';
+ $('picks').innerHTML=S.picks.length?S.picks.map((p,i)=>{const r=c.picks[i],cls=r.st=='ok'?'ok':r.st=='over'?'warn':'bad';
+  return `<div class="pk ${cls}">${r.st=='ok'?'✅':r.st=='over'?'⚠️':'❌'} ${esc(p.sku)} ・ 批号 ${esc(p.batch||'—')} ×${p.qty}<br><span style="font-size:14px">${esc(r.msg)}</span> <button class="del" style="float:right;margin-top:-18px" onclick="delPick(${i})">✕</button></div>`;}).reverse().join(''):'<div class="st">还没拍货物。</div>';}
+function clearPicks(){if(confirm('清空所有拣货记录？清单会保留。')){S.picks=[];save();renderResult();$('ban').style.display='none';}}
+function clearAll(){if(confirm('清单和拣货记录全部清空？')){S={list:[],picks:[]};save();render();$('ban').style.display='none';$('lprev').style.display='none';$('pprev').style.display='none';$('lst').textContent='拍的时候整张单放平、拍正、光线够。';}}
+render();
+</script></body></html>
