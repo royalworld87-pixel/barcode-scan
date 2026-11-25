@@ -6,7 +6,7 @@
 <script src="../prep.js?v=6"></script>
 <script src="../logic.js?v=6"></script>
 <script src="../paddle.js?v=6"></script>
-<script src="pick.js?v=1"></script>
+<script src="pick.js?v=2"></script>
 <style>
 body{font-family:system-ui,sans-serif;margin:0;padding:12px;background:#f4f4f4;color:#222;max-width:600px;margin:auto}
 h1{font-size:21px;margin:4px 0 6px}h2{font-size:18px;margin:0 0 6px}
@@ -143,7 +143,7 @@ function renderResult(){const c=Pick.check(S.list,S.picks);
  $('sum').innerHTML=`<div class="ok"><b>${done}/${S.list.length}</b>行拣齐</div><div class="warn"><b>${todo}</b>行还没拣齐</div><div class="${bad?'bad':'ok'}"><b>${bad}</b>件不对</div>`;
  const lab={done:'✅ 拣齐',part:'🟡 还差',todo:'⬜ 还没拣',over:'⚠️ 拿多了'};
  const order=c.rows.map((r,i)=>i).sort((a,b)=>({todo:0,part:1,over:2,done:3}[c.rows[a].st])-({todo:0,part:1,over:2,done:3}[c.rows[b].st])||a-b);
- $('rows').innerHTML=S.list.length?order.map(i=>{const r=S.list[i],s=c.rows[i];return `<div class="li ${s.st}"><b>${i+1}.</b> ${esc(r.sku)} ・ 批号 ${esc(r.batch||'—')} ・ ${s.got}/${s.need} ${lab[s.st]}${s.st=='part'?' '+(s.need-s.got)+' 件':''}</div>`;}).join(''):'<div class="st">还没有清单。</div>';
+ $('rows').innerHTML=S.list.length?order.map(i=>{const r=S.list[i],s=c.rows[i];return `<div class="li ${s.st}"><b>${i+1}.</b> ${esc(r.sku)}${r.ppn?' <small>('+esc(r.ppn)+')</small>':''}${r.loc?' ・ <small>货位 '+esc(r.loc)+'</small>':''} ・ 批号 ${esc(r.batch||'—')} ・ ${s.got}/${s.need} ${lab[s.st]}${s.st=='part'?' '+(s.need-s.got)+' 件':''}</div>`;}).join(''):'<div class="st">还没有清单。</div>';
  $('picks').innerHTML=S.picks.length?S.picks.map((p,i)=>{const r=c.picks[i],cls=r.st=='ok'?'ok':r.st=='over'?'warn':'bad';
   return `<div class="pk ${cls}">${r.st=='ok'?'✅':r.st=='over'?'⚠️':'❌'} ${esc(p.sku)} ・ 批号 ${esc(p.batch||'—')} ×${p.qty}<br><span style="font-size:14px">${esc(r.msg)}</span> <button class="del" style="float:right;margin-top:-18px" onclick="delPick(${i})">✕</button></div>`;}).reverse().join(''):'<div class="st">还没拍货物。</div>';}
 function clearPicks(){if(confirm('清空所有拣货记录？清单会保留。')){S.picks=[];save();renderResult();$('ban').style.display='none';}}
