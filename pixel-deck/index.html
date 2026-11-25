@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a120e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>像素甲板 · 演示</title>
+<style>
+  :root {
+    --desk: #1a120e;
+    --ink: #f3efe7;
+    --muted: #9a9186;
+    --orange: #ff5a1f;
+    --orange-dim: #c43a12;
+    --cyan: #7ee7d8;
+    --cyan-dim: #1b5e57;
+    --tile: #14141a;
+    --tile2: #1c1c24;
+    --line: #2a2a34;
+    --need: #ff6a2b;
+    --ok: #3ecf6e;
+    --idle: #8a8894;
+    --danger: #ff6b6b;
+    --shadow: 0 18px 50px rgba(0,0,0,.45);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; height: 100dvh; overflow: hidden; background: var(--desk); color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Source Han Sans SC",
+      "Microsoft YaHei", system-ui, sans-serif; }
+  body {
+    min-height: 100dvh;
+    background:
+      radial-gradient(ellipse at 50% 0%, #2a1b14 0%, var(--desk) 55%),
+      repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255,255,255,.025) 24px),
+      repeating-linear-gradient(90deg, transparent, transparent 23px, rgba(255,255,255,.025) 24px);
+    overflow-x: hidden;
+  }
+  .wrap {
+    height: 100%;
+    height: 100dvh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: calc(12px + env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom));
+    gap: 8px;
+    overflow: hidden;
+  }
+  header.top {
+    width: min(96vw, calc(100dvh - 200px), 560px);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    flex-shrink: 0;
+  }
+  .brand { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .brand h1 { margin: 0; font-size: 16px; letter-spacing: .06em; font-weight: 700; line-height: 1.2; }
+  .brand p { margin: 0; font-size: 11px; color: var(--muted); }
+  .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .chip, button.chip {
+    appearance: none; border: 1px solid #3a322c; background: #241c18; color: var(--ink);
+    border-radius: 999px; padding: 7px 11px; font-size: 12px; font-weight: 600;
+    min-height: 36px; cursor: pointer;
+  }
+  .chip.on { background: var(--orange); border-color: var(--orange); color: #fff; }
+  .chip:active { transform: scale(.96); }
+  .need-badge {
+    display: none; min-width: 18px; height: 18px; border-radius: 9px;
+    background: var(--need); color: #fff; font-size: 11px; font-weight: 700;
+    align-items: center; justify-content: center; padding: 0 5px; margin-left: 4px;
+  }
+  .need-badge.show { display: inline-flex; }
+
+  .stage { width: min(96vw, calc(100dvh - 200px), 560px); position: relative; }
+  .device {
+    width: 100%; aspect-ratio: 1; position: relative;
+    filter: drop-shadow(0 22px 36px rgba(0,0,0,.5));
+    transition: border-radius .3s ease, transform .3s ease;
+  }
+  .bezel {
+    width: 100%; height: 100%; background: linear-gradient(160deg, #ff7a3d, var(--orange) 40%, #d63d0c);
+    border-radius: 18px; padding: 4.6%;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 6px rgba(80,10,0,.35);
+  }
+  .device.watch .bezel {
+    background: linear-gradient(160deg, #2a2a30, #111114 55%, #000);
+    border-radius: 28%;
+    padding: 9%;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 8px rgba(0,0,0,.6);
+  }
+  .screen {
+    width: 100%; height: 100%; background: #0b0b10; border-radius: 8px; overflow: hidden;
+    position: relative; display: flex; flex-direction: column;
+  }
+  .device.watch .screen { border-radius: 22%; }
+  .device.watch .topbar { padding: 14px 20px 6px; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px 4px; font-size: 11px; color: #c9c4bb; flex-shrink: 0;
+  }
+  .topbar .clock { font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+  .grid {
+    flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr);
+    gap: 5px; padding: 4px 8px 10px; min-height: 0;
+  }
+  .device.watch .grid { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 8px; padding: 4px 14px 6px; }
+  .tile {
+    background: var(--tile); border: 1px solid var(--line); border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; padding: 4px 2px 3px; cursor: pointer; position: relative; overflow: hidden;
+    user-select: none;
+  }
+  .tile:active { transform: scale(.96); }
+  .tile.empty { border-style: dashed; color: #555; }
+  .tile.empty .plus { font-size: 22px; line-height: 1; color: #666; }
+  .tile.needs { border-color: var(--need); box-shadow: 0 0 0 1px var(--need), 0 0 14px rgba(255,90,31,.45); animation: pulse 1.4s ease-in-out infinite; }
+  .tile.working { border-color: #2a3a2e; }
+  .tile.done { border-color: #1d3a2c; }
+  .tile.idle { opacity: .85; }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 1px var(--need), 0 0 8px rgba(255,90,31,.3); }
+    50% { box-shadow: 0 0 0 2px var(--need), 0 0 18px rgba(255,90,31,.7); }
+  }
+  .tile img.spr { width: 46%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .device.watch .tile img.spr { width: 42%; }
+  .tile.working img.spr { animation: bob .7s ease-in-out infinite; }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  .tile .name { font-size: 10px; line-height: 1.15; text-align: center; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
+  .tile .st { font-size: 9px; color: var(--muted); }
+  .tile.needs .st { color: var(--need); font-weight: 700; }
+  .tile.working .st { color: var(--ok); }
+  .tile.done .st { color: var(--cyan); }
+  .dot {
+    position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%;
+    background: #444;
+  }
+  .tile.working .dot { background: var(--ok); }
+  .tile.needs .dot { background: var(--need); }
+  .tile.done .dot { background: var(--cyan); }
+  .tile.idle .dot { background: var(--idle); }
+
+  .pager { display: none; text-align: center; font-size: 10px; color: #9a9186; padding: 0 8px 12px; }
+  .pager .doti { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #3a3a44; margin: 0 3px; vertical-align: middle; }
+  .pager .doti.on { background: #f3efe7; }
+  .device.watch .pager { display: block; }
+
+  .detail {
+    display: none; position: absolute; inset: 0; background: #0b0b10;
+    flex-direction: column; padding: 10px 12px 12px; overflow: hidden;
+  }
+  .detail.show { display: flex; }
+  .d-head { display: flex; align-items: flex-start; gap: 8px; }
+  .d-head img.spr { width: 36px; height: 36px; image-rendering: pixelated; flex-shrink: 0; }
+  .d-head .meta { flex: 1; min-width: 0; }
+  .d-head h2 { margin: 0; font-size: 16px; font-weight: 700; }
+  .d-head .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .d-clock { font-size: 11px; color: #aaa; font-variant-numeric: tabular-nums; }
+  .back {
+    appearance: none; border: 0; background: #1c1c24; color: var(--ink);
+    border-radius: 8px; width: 32px; height: 32px; font-size: 16px; cursor: pointer; flex-shrink: 0;
+  }
+  .ctx { margin: 12px 0 8px; }
+  .ctx-row { display: flex; justify-content: space-between; font-size: 11px; color: #bbb; margin-bottom: 4px; }
+  .meter { height: 6px; background: #222; border-radius: 3px; overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: linear-gradient(90deg, #3ecf6e, #e8d14a, #ff5a1f); width: 0; transition: width .4s; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 8px 0; }
+  .stat { background: #14141a; border-radius: 8px; padding: 6px 4px; text-align: center; }
+  .stat b { display: block; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 9px; color: var(--muted); }
+  .prompt {
+    flex: 1; min-height: 0; overflow: auto; background: #101016; border: 1px solid #222;
+    border-radius: 8px; padding: 8px; font-size: 12px; line-height: 1.45; color: #d8d4cc;
+    margin: 6px 0 10px; white-space: pre-wrap;
+  }
+  .prompt .lab { font-size: 10px; color: #888; margin-bottom: 4px; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .btns.three { grid-template-columns: 1.2fr 1fr 1fr; }
+  .btn {
+    appearance: none; border: 0; border-radius: 10px; min-height: 42px; font-size: 13px;
+    font-weight: 700; cursor: pointer; padding: 0 8px;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn.cyan { background: var(--cyan); color: #062824; }
+  .btn.dark { background: #23232c; color: var(--ink); border: 1px solid #333; }
+  .btn.danger { background: #3a1b1b; color: var(--danger); border: 1px solid #5a2a2a; }
+  .btn.ok { background: var(--orange); color: #fff; }
+  .ask {
+    background: #2a160e; border: 1px solid var(--orange); color: #ffd2c0;
+    border-radius: 8px; padding: 8px; font-size: 13px; margin-bottom: 8px; line-height: 1.4;
+  }
+
+  .toast {
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%) translateY(-8px);
+    background: #ff5a1f; color: #fff; font-size: 12px; font-weight: 700;
+    padding: 8px 14px; border-radius: 999px; opacity: 0; pointer-events: none;
+    transition: .25s ease; z-index: 5; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  footer.note {
+    flex-shrink: 0;
+    width: min(96vw, 560px); font-size: 11px; color: var(--muted); line-height: 1.5; text-align: center;
+  }
+  .legend { flex-shrink: 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 4px; font-size: 11px; color: #c9c4bb; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(10,8,6,.78); display: flex;
+    align-items: flex-end; justify-content: center; z-index: 20; padding: 16px;
+  }
+  .overlay.hide { display: none; }
+  .sheet {
+    width: min(100%, 440px); background: #1c1612; color: var(--ink);
+    border-radius: 18px 18px 14px 14px; padding: 20px 18px 16px;
+    box-shadow: var(--shadow); margin-bottom: env(safe-area-inset-bottom);
+  }
+  .sheet h2 { margin: 0 0 8px; font-size: 20px; }
+  .sheet p { margin: 0 0 10px; font-size: 14px; line-height: 1.55; color: #ddd6cc; }
+  .sheet ol { margin: 0 0 14px; padding-left: 20px; font-size: 14px; line-height: 1.6; color: #ddd6cc; }
+  .sheet .go { width: 100%; min-height: 46px; }
+
+  @media (max-height: 620px) {
+    .brand h1 { font-size: 15px; }
+    .tile .name { font-size: 9px; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <h1>像素甲板 <span class="need-badge" id="needBadge">0</span></h1>
+        <p>演示版 · 点小怪物查看、批准或停下</p>
+      </div>
+      <div class="actions">
+        <button class="chip on" id="btnPanel" type="button">大屏</button>
+        <button class="chip" id="btnWatch" type="button">小屏</button>
+      </div>
+    </header>
+
+    <div class="stage">
+      <div class="device panel" id="device">
+        <div class="bezel">
+          <div class="screen" id="screen">
+            <div class="topbar">
+              <span id="statusLine">助手 0 只需你处理</span>
+              <span class="clock" id="clock">00:00</span>
+            </div>
+            <div class="grid" id="grid"></div>
+            <div class="pager" id="pager"></div>
+            <div class="detail" id="detail"></div>
+            <div class="toast" id="toast"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:#3ecf6e"></i>干活中</span>
+      <span><i style="background:#ff6a2b"></i>等你批准</span>
+      <span><i style="background:#7ee7d8"></i>做完了</span>
+      <span><i style="background:#8a8894"></i>空闲</span>
+    </div>
+    <footer class="note">
+      这是可以在手机上玩的演示，不连接真实助手或硬件，也不收集任何资料。
+      灵感来自公开的桌面智能体控制屏概念，并非原项目，也没有使用它的名称或画风。
+    </footer>
+  </div>
+
+  <div class="overlay" id="intro">
+    <div class="sheet">
+      <h2>来玩像素甲板</h2>
+      <p>片里是一块实体方屏：每个像素小怪物代表一个正在干活的助手。真机要接电脑和小屏。这个网页版让你在手机上体验同样的操作。</p>
+      <ol>
+        <li>点一只亮橙色的小怪物，看看它在问什么。</li>
+        <li>按「批准」让它继续，或按「停下」。</li>
+        <li>也可以切到「小屏」，像片里那块更小的屏幕一样，一页看 4 只。</li>
+        <li>空格子可以再派出一只新助手。</li>
+      </ol>
+      <button class="btn ok go" id="startBtn" type="button">开始玩</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const PAL = {
+    ".": null, "k": "#1a140f", "w": "#f4efe6", "o": "#ff6a2b", "r": "#e23d2b",
+    "y": "#ffd15a", "g": "#3ecf6e", "t": "#1f8a4c", "b": "#4aa3ff", "c": "#5ee0d0",
+    "p": "#ff8ad1", "n": "#a86b3c", "d": "#6b3a1f", "a": "#8a8894", "m": "#c084fc",
+    "e": "#2a2a32", "s": "#f0c4a0", "h": "#5a3dff", "u": "#7ec8ff", "f": "#ffb347"
+  };
+
+  const SPRITES = {
+    crab: [
+      "......kk......",
+      "....kkrkk.....",
+      "..k.krrrrk.k..",
+      ".kkrrrrrrrrkk.",
+      "krrrkrrrrkrrrk",
+      "krrrrwwrrrrrrk",
+      ".krrrkkrrrrrk.",
+      "..krrrrrrrrk..",
+      "...k.kkkk.k...",
+      "....k....k...."
+    ],
+    frog: [
+      "................",
+      "..kk......kk....",
+      ".kggkk..kkggk...",
+      "kggwwgkkggwwgk..",
+      "kgkkwggggkkkgk..",
+      "kggggggggggggk..",
+      ".kkggggggggkk...",
+      "..kggkkgggk.....",
+      "...kk....kk....."
+    ],
+    bird: [
+      "......kk........",
+      ".....kooyk......",
+      "....koooyyk.....",
+      "...kooowoyyk....",
+      "..kkoooyyyyok...",
+      ".krrkoooyyyyk...",
+      ".krrkkoyyyyok...",
+      "..kk..koyyyk....",
+      ".......kkkk....."
+    ],
+    ghost: [
+      ".....kkkk.......",
+      "...kkwwwwkk.....",
+      "..kwwwwwwwwk....",
+      ".kwwkkwkkwkwk...",
+      ".kwwkkwkkwkwk...",
+      ".kwwwwwwwwwwk...",
+      ".kwwwwwwwwwwk...",
+      ".kwkwkwkwkwkk...",
+      "..k.k.k.k.k....."
+    ],
+    mush: [
+      ".....kkkk.......",
+      "...kkrorrkk.....",
+      "..krorwrorrk....",
+      ".krorrrrrrrrk...",
+      ".krrrrrrrrrrk...",
+      "..kkkkkkkkkk....",
+      "....kssssk......",
+      "....kssssk......",
+      ".....kkkk......."
+    ],
+    cat: [
+      "..k....k........",
+      ".kfk..kfk.......",
+      ".kffkkffk.......",
+      "kffwwffwwfk.....",
+      "kfwkkfwkkfk.....",
+      "kffffffffk......",
+      ".kffppffk.......",
+      "..kffffk........",
+      "...kkkk........."
+    ],
+    fish: [
+      "................",
+      "....kkkkk.......",
+      "..kkuuuwuuk.k...",
+      ".kuuuwuuuukk....",
+      "kuukkuuuuuuk....",
+      ".kuuuuuuukk.....",
+      "..kkkuuuk.k.....",
+      ".....kkk........"
+    ],
+    bot: [
+      "...k....k.......",
+      "...kkkkkk.......",
+      "..kcccccck......",
+      ".kcwwccwwck.....",
+      ".kcckkcckck.....",
+      ".kcccccccck.....",
+      "..kkcckcck......",
+      "...k....k.......",
+      "...k....k......."
+    ],
+    fox: [
+      ".k........k.....",
+      ".kok....kok.....",
+      ".koookkookok....",
+      "koottooootok....",
+      "kotkktokktok....",
+      "koooooowook.....",
+      ".koooooook......",
+      "..kkkkkkkk......"
+    ],
+    penguin: [
+      ".....kkkk.......",
+      "....kwwwwk......",
+      "...kwkkwwk......",
+      "...kwkkwwk......",
+      "...kyywwyk......",
+      "..kwwwwwwwk.....",
+      "..kwwwwwwwk.....",
+      "...kkkkkkkk.....",
+      "....ko..ok......"
+    ],
+    bee: [
+      "................",
+      "..k..kk..k......",
+      ".kukkwwkkuk.....",
+      "kukkyykkykuk....",
+      "kukkyykkykuk....",
+      ".kkkyyyyykk.....",
+      "..kkykykyk......",
+      "....k...k......."
+    ],
+    dragon: [
+      "k.........k.....",
+      "kgk......kgk....",
+      "kggkkkkkkggk....",
+      ".kggwwggwwgk....",
+      ".kggkkggkkgk....",
+      "..kgggggggk.....",
+      "..kgkggkgk......",
+      "...k.kk.k......."
+    ],
+    slime: [
+      "................",
+      ".....kkkk.......",
+      "...kkmmmmkk.....",
+      "..kmmwwmmmmk....",
+      ".kmmkkmmmmmmk...",
+      ".kmmmmmmmmmmk...",
+      "..kkmmmmmmkk....",
+      "....kkkkkk......"
+    ],
+    owl: [
+      "....k....k......",
+      "...knkkknk......",
+      "..knnwwwnnk.....",
+      ".knkwkkwknn k...".replace(" ",""),
+      ".knnwwwwwnnk....",
+      "..knnnnnnnk.....",
+      "...knyyynk......",
+      "....kkkkk......."
+    ],
+    rabbit: [
+      "..k..k..........",
+      ".kwk.kwk........",
+      ".kwwkkwwk.......",
+      ".kwwwwwwwk......",
+      "kwwkkwkkwwk.....",
+      "kwwwwwwwwwk.....",
+      ".kwwppwwwk......",
+      "..kkkkkkkk......"
+    ],
+    star: [
+      ".......k........",
+      "......kyk.......",
+      "......kyk.......",
+      "..kkkkkykkkkk...",
+      "...kyyyyyyyk....",
+      "....kyyyyyk.....",
+      "...kyk...kyk....",
+      "..kyk.....kyk..."
+    ]
+  };
+
+  const cache = {};
+  function spriteUrl(key, scale) {
+    scale = scale || 8;
+    const id = key + "@" + scale;
+    if (cache[id]) return cache[id];
+    const rows = SPRITES[key];
+    const h = rows.length, w = Math.max.apply(null, rows.map(r => r.length));
+    const c = document.createElement("canvas");
+    c.width = w * scale; c.height = h * scale;
+    const ctx = c.getContext("2d");
+    for (let y = 0; y < h; y++) {
+      const row = rows[y];
+      for (let x = 0; x < row.length; x++) {
+        const col = PAL[row[x]];
+        if (!col) continue;
+        ctx.fillStyle = col;
+        ctx.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+    cache[id] = c.toDataURL();
+    return cache[id];
+  }
+
+  const TASKS = [
+    { title: "整理今日笔记", body: "把今天的笔记整理成三张容易记的卡片。" },
+    { title: "核对拣货清单", body: "对照清单和货物标签，标出对不上的项目。" },
+    { title: "切分听书稿", body: "把听书稿按章节切开，并标出每段时长。" },
+    { title: "查找卦义", body: "查出「泰卦」六个爻的大意，写成短句。" },
+    { title: "写感谢短讯", body: "写一封简短、真诚的感谢信草稿。" },
+    { title: "表格转文字", body: "把表格转成干净、好读的文字说明。" },
+    { title: "检查重复待办", body: "找出清单里重复或已经做过的事项。" },
+    { title: "列出学习要点", body: "为明天的学习列出五个要点。" },
+    { title: "改成白话", body: "把一段说明改写成更容易听懂的白话。" },
+    { title: "用量摘要", body: "整理本周用量，标出用得最多的项目。" },
+    { title: "加上分类标签", body: "给这份清单加上分类标签，方便以后查找。" },
+    { title: "找出不一致", body: "找出文稿里前后说法不一致的地方。" }
+  ];
+  const ASKS = [
+    "要运行「整理卡片」脚本吗？这只是演示，不会真的改你的文件。",
+    "要从公开网页读取资料吗？演示里不会真的上网。",
+    "要覆盖已经写好的草稿吗？演示里不会真的保存。",
+    "要在本地新建一个文件夹吗？演示里只是问问你。",
+    "下一步要写入一份摘要，可以继续吗？"
+  ];
+
+  const SPECIES = [
+    { id: "crab", name: "赤蟹" },
+    { id: "frog", name: "青蛙" },
+    { id: "bird", name: "火鸟" },
+    { id: "ghost", name: "幽灵" },
+    { id: "mush", name: "蘑菇" },
+    { id: "cat", name: "花猫" },
+    { id: "fish", name: "锦鲤" },
+    { id: "bot", name: "齿轮仔" },
+    { id: "fox", name: "狐狸" },
+    { id: "penguin", name: "企鹅" },
+    { id: "bee", name: "蜜蜂" },
+    { id: "dragon", name: "小龙" },
+    { id: "slime", name: "史莱姆" },
+    { id: "owl", name: "猫头鹰" },
+    { id: "rabbit", name: "兔子" },
+    { id: "star", name: "海星" }
+  ];
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+
+  const agents = SPECIES.map((s, i) => {
+    const task = TASKS[i % TASKS.length];
+    const states = ["needs","needs","working","working","working","working","working","working","working","idle","idle","done","done","empty","working","empty"];
+    const st = states[i];
+    return {
+      id: i,
+      sprite: s.id,
+      name: s.name,
+      state: st,
+      task: st === "empty" ? null : task,
+      ask: st === "needs" ? ASKS[i % ASKS.length] : null,
+      context: st === "empty" ? 0 : 18 + (i * 7) % 60,
+      tokens: st === "empty" ? 0 : 800 + i * 240,
+      cost: st === "empty" ? 0 : +(0.08 + i * 0.03).toFixed(2),
+      turns: st === "empty" ? 0 : 4 + i,
+      progress: st === "working" ? 20 + (i * 11) % 55 : st === "done" ? 100 : st === "needs" ? 48 : 0,
+      log: st === "empty" ? "" : (st === "needs" ? "已停下来等你决定。" : "正在处理：" + task.body)
+    };
+  });
+
+  let mode = "panel"; // panel | watch
+  let watchPage = 0;
+  let openId = null;
+  let toastTimer = 0;
+
+  const el = {
+    device: document.getElementById("device"),
+    grid: document.getElementById("grid"),
+    pager: document.getElementById("pager"),
+    detail: document.getElementById("detail"),
+    clock: document.getElementById("clock"),
+    status: document.getElementById("statusLine"),
+    badge: document.getElementById("needBadge"),
+    toast: document.getElementById("toast"),
+    intro: document.getElementById("intro"),
+    btnPanel: document.getElementById("btnPanel"),
+    btnWatch: document.getElementById("btnWatch")
+  };
+
+  function nowClock() {
+    const d = new Date();
+    return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+  }
+  function stateLabel(st) {
+    return { working: "干活中", needs: "等你批准", done: "做完了", idle: "空闲", empty: "空位" }[st] || st;
+  }
+  function needCount() { return agents.filter(a => a.state === "needs").length; }
+
+  function visibleAgents() {
+    if (mode === "panel") return agents;
+    const start = watchPage * 4;
+    return agents.slice(start, start + 4);
+  }
+
+  function toast(msg) {
+    el.toast.textContent = msg;
+    el.toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.toast.classList.remove("show"), 2200);
+  }
+
+  function renderGrid() {
+    const vis = visibleAgents();
+    el.grid.innerHTML = vis.map(a => {
+      if (a.state === "empty") {
+        return `<button class="tile empty" type="button" data-id="${a.id}" aria-label="派出新助手">
+          <div class="plus">＋</div><div class="name">空位</div><div class="st">点我派出</div>
+        </button>`;
+      }
+      return `<button class="tile ${a.state}" type="button" data-id="${a.id}" aria-label="${a.name}，${stateLabel(a.state)}">
+        <span class="dot"></span>
+        <img class="spr" alt="" src="${spriteUrl(a.sprite)}">
+        <div class="name">${a.name}</div>
+        <div class="st">${stateLabel(a.state)}</div>
+      </button>`;
+    }).join("");
+    if (mode === "watch") {
+      const pages = Math.ceil(agents.length / 4);
+      const dots = Array.from({length: pages}, (_, i) => `<span class="doti${i===watchPage?" on":""}"></span>`).join("");
+      el.pager.innerHTML = dots + " <span style='margin-left:6px'>左右滑换页</span>";
+    } else {
+      el.pager.innerHTML = "";
+    }
+    const n = needCount();
+    el.status.textContent = n ? ("有 " + n + " 只等你批准") : "都在按自己的节奏干活";
+    el.badge.textContent = n;
+    el.badge.classList.toggle("show", n > 0);
+    el.clock.textContent = nowClock();
+  }
+
+  function renderDetail() {
+    const a = agents.find(x => x.id === openId);
+    if (!a || a.state === "empty") {
+      el.detail.classList.remove("show");
+      el.detail.innerHTML = "";
+      return;
+    }
+    const askBlock = a.state === "needs" && a.ask
+      ? `<div class="ask" id="askBox">在问你：${a.ask}</div>` : "";
+    const mainBtn = a.state === "needs"
+      ? `<button class="btn ok" type="button" data-act="approve">批准</button>
+         <button class="btn dark" type="button" data-act="deny">先不要</button>
+         <button class="btn danger" type="button" data-act="stop">停下</button>`
+      : a.state === "done"
+      ? `<button class="btn cyan" type="button" data-act="close">看到了</button>
+         <button class="btn dark" type="button" data-act="assign">再派任务</button>
+         <button class="btn danger" type="button" data-act="clear">收起来</button>`
+      : a.state === "idle"
+      ? `<button class="btn cyan" type="button" data-act="assign">派出任务</button>
+         <button class="btn dark" type="button" data-act="close">返回</button>
+         <button class="btn danger" type="button" data-act="clear">收起来</button>`
+      : `<button class="btn cyan" type="button" data-act="close">返回甲板</button>
+         <button class="btn dark" type="button" data-act="wait">继续等</button>
+         <button class="btn danger" type="button" data-act="stop">停下</button>`;
+    const cols = a.state === "needs" || a.state === "working" || a.state === "done" || a.state === "idle" ? "three" : "";
+    el.detail.innerHTML = `
+      <div class="d-head">
+        <button class="back" type="button" data-act="close" aria-label="返回">‹</button>
+        <img class="spr" alt="" src="${spriteUrl(a.sprite)}">
+        <div class="meta">
+          <h2>${a.name}</h2>
+          <div class="sub">${a.task ? a.task.title : "没有任务"} · ${stateLabel(a.state)}</div>
+        </div>
+        <div class="d-clock">${nowClock()}</div>
+      </div>
+      <div class="ctx">
+        <div class="ctx-row"><span>上下文</span><span>${a.context}%</span></div>
+        <div class="meter"><i style="width:${a.context}%"></i></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b>${(a.tokens/1000).toFixed(1)}k</b><span>字数用量</span></div>
+        <div class="stat"><b>$${a.cost.toFixed(2)}</b><span>演示费用</span></div>
+        <div class="stat"><b>${a.turns}</b><span>来回次数</span></div>
+        <div class="stat"><b>${a.progress}%</b><span>进度</span></div>
+      </div>
+      ${askBlock}
+      <div class="prompt"><div class="lab">${a.state === "needs" ? "上次说明" : "正在做"}</div>${a.log || (a.task ? a.task.body : "")}</div>
+      <div class="btns ${cols}">${mainBtn}</div>
+    `;
+    el.detail.classList.add("show");
+  }
+
+  function render() {
+    el.device.className = "device " + (mode === "watch" ? "watch" : "panel");
+    el.btnPanel.classList.toggle("on", mode === "panel");
+    el.btnWatch.classList.toggle("on", mode === "watch");
+    renderGrid();
+    renderDetail();
+  }
+
+  function openAgent(id) {
+    const a = agents[id];
+    if (!a) return;
+    if (a.state === "empty") {
+      assign(a);
+      openId = a.id;
+      toast(a.name + " 出发了");
+    } else {
+      openId = id;
+    }
+    render();
+  }
+
+  function assign(a) {
+    const used = new Set(agents.filter(x => x.state !== "empty").map(x => x.sprite));
+    if (a.state === "empty") {
+      const free = SPECIES.find(s => !agents.some(x => x.state !== "empty" && x.sprite === s.id)) || pick(SPECIES);
+      a.sprite = free.id;
+      a.name = free.name;
+    }
+    const task = pick(TASKS);
+    a.state = "working";
+    a.task = task;
+    a.ask = null;
+    a.context = 8 + Math.floor(Math.random() * 20);
+    a.tokens = 200 + Math.floor(Math.random() * 400);
+    a.cost = +(0.02 + Math.random() * 0.08).toFixed(2);
+    a.turns = 1;
+    a.progress = 5 + Math.floor(Math.random() * 10);
+    a.log = "接到新任务：" + task.body;
+  }
+
+  function act(kind) {
+    const a = agents.find(x => x.id === openId);
+    if (!a) return;
+    if (kind === "close") { openId = null; render(); return; }
+    if (kind === "approve") {
+      a.state = "working";
+      a.log = "你批准了。继续：" + (a.task ? a.task.body : "当前任务");
+      a.ask = null;
+      a.turns += 1;
+      toast(a.name + " 继续干活");
+    } else if (kind === "deny") {
+      a.state = "idle";
+      a.log = "你选择先不要。它停在这里等下一次任务。";
+      a.ask = null;
+      toast(a.name + " 先待命");
+    } else if (kind === "stop") {
+      a.state = "idle";
+      a.ask = null;
+      a.log = "已停下。进度停在 " + a.progress + "%。";
+      toast(a.name + " 已停下");
+    } else if (kind === "wait") {
+      openId = null;
+      toast("它会继续做，有问题再叫你");
+    } else if (kind === "assign") {
+      assign(a);
+      toast(a.name + " 领了新任务");
+    } else if (kind === "clear") {
+      a.state = "empty";
+      a.task = null; a.ask = null; a.log = ""; a.progress = 0; a.tokens = 0; a.cost = 0; a.turns = 0; a.context = 0;
+      openId = null;
+      toast("位置空出来了");
+    }
+    render();
+  }
+
+  function tick() {
+    let becameNeed = null;
+    agents.forEach(a => {
+      if (a.state === "working") {
+        a.progress = clamp(a.progress + 2 + Math.floor(Math.random() * 4), 0, 100);
+        a.tokens += 20 + Math.floor(Math.random() * 40);
+        a.cost = +(a.cost + 0.01).toFixed(2);
+        if (Math.random() < 0.35) a.context = clamp(a.context + 1, 0, 97);
+        if (Math.random() < 0.2) a.turns += 1;
+        if (a.progress >= 100) {
+          a.state = "done";
+          a.progress = 100;
+          a.log = "做完了：" + (a.task ? a.task.body : "") + "\n可以点「看到了」，或再派一个任务。";
+          if (openId === a.id) toast(a.name + " 做完了");
+        } else if (a.progress > 25 && a.progress < 90 && Math.random() < 0.08) {
+          a.state = "needs";
+          a.ask = pick(ASKS);
+          a.log = "做到一半，想先问你一声。";
+          becameNeed = a;
+        }
+      }
+    });
+    if (becameNeed && openId !== becameNeed.id) toast(becameNeed.name + " 在等你批准");
+    render();
+  }
+
+  el.grid.addEventListener("click", ev => {
+    const t = ev.target.closest("[data-id]");
+    if (!t) return;
+    openAgent(+t.getAttribute("data-id"));
+  });
+  el.detail.addEventListener("click", ev => {
+    const t = ev.target.closest("[data-act]");
+    if (!t) return;
+    act(t.getAttribute("data-act"));
+  });
+  el.btnPanel.addEventListener("click", () => { mode = "panel"; openId = null; render(); });
+  el.btnWatch.addEventListener("click", () => { mode = "watch"; openId = null; watchPage = 0; render(); });
+  document.getElementById("startBtn").addEventListener("click", () => {
+    el.intro.classList.add("hide");
+    try { sessionStorage.setItem("pixel-deck-intro", "1"); } catch (e) {}
+  });
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get("nointro") === "1" || sessionStorage.getItem("pixel-deck-intro") === "1") el.intro.classList.add("hide");
+    if (q.get("mode") === "watch") { mode = "watch"; }
+    if (q.get("open")) { openId = +q.get("open"); }
+  } catch (e) {}
+
+  let sx = 0;
+  el.device.addEventListener("touchstart", ev => { sx = ev.changedTouches[0].clientX; }, {passive:true});
+  el.device.addEventListener("touchend", ev => {
+    if (mode !== "watch" || openId !== null) return;
+    const dx = ev.changedTouches[0].clientX - sx;
+    const pages = Math.ceil(agents.length / 4);
+    if (dx < -40) watchPage = (watchPage + 1) % pages;
+    else if (dx > 40) watchPage = (watchPage - 1 + pages) % pages;
+    else return;
+    render();
+  }, {passive:true});
+
+  setInterval(() => { el.clock.textContent = nowClock(); }, 10000);
+  setInterval(tick, 1600);
+  render();
+
+  if (new URLSearchParams(location.search).get("test") === "1") {
+    const errors = [];
+    window.addEventListener("error", function (e) { errors.push(String(e.message || e)); });
+    window.addEventListener("unhandledrejection", function (e) { errors.push(String(e.reason)); });
+    const lines = [];
+    function check(cond, msg) {
+      lines.push((cond ? "PASS" : "FAIL") + " " + msg);
+      if (!cond) errors.push(msg);
+    }
+    try {
+      el.intro.classList.add("hide");
+      check(document.querySelectorAll("#grid .tile").length === 16, "大屏 16 个格子");
+      check(document.querySelectorAll(".tile.needs").length >= 1, "有待批准的助手");
+      document.querySelector(".tile.needs").click();
+      check(el.detail.classList.contains("show"), "点开详情");
+      check(!!el.detail.querySelector("[data-act=approve]"), "出现批准按钮");
+      const name = (el.detail.querySelector("h2") || {}).textContent;
+      el.detail.querySelector("[data-act=approve]").click();
+      const approved = agents.find(a => a.name === name);
+      check(approved && approved.state === "working", "批准后继续干活：" + name);
+      check(!el.detail.querySelector("[data-act=approve]"), "批准后问题关闭");
+      document.getElementById("btnWatch").click();
+      check(el.device.classList.contains("watch"), "切到小屏");
+      check(document.querySelectorAll("#grid .tile").length === 4, "小屏一页 4 只");
+      document.getElementById("btnPanel").click();
+      check(!el.device.classList.contains("watch"), "切回大屏");
+      const empties = document.querySelectorAll(".tile.empty").length;
+      document.querySelector(".tile.empty").click();
+      check(document.querySelectorAll(".tile.empty").length === empties - 1, "空位派出新助手");
+      check(el.detail.classList.contains("show"), "新助手打开详情");
+    } catch (err) {
+      errors.push(String(err && err.stack || err));
+      lines.push("FAIL 测试过程出错：" + err);
+    }
+    const report = document.createElement("pre");
+    report.id = "test-result";
+    report.setAttribute("data-ok", errors.length ? "0" : "1");
+    report.textContent = (errors.length ? "TEST_FAIL\n" : "TEST_OK\n") + lines.join("\n") +
+      (errors.length ? "\nERRORS\n" + errors.join("\n") : "");
+    report.style.cssText = "position:fixed;bottom:0;left:0;right:0;max-height:30%;overflow:auto;background:#111;color:#9f9;font:12px monospace;padding:8px;z-index:99;";
+    document.body.appendChild(report);
+    document.title = errors.length ? "TEST_FAIL" : "TEST_OK";
+  }
+})();
+</script>
+</body>
+</html>
